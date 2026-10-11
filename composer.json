@@ -13,6 +13,11 @@
         "issues": "https://github.com/sailantis/stokehold-php-sdk/issues",
         "source": "https://github.com/sailantis/stokehold-php-sdk"
     },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "0.1.x-dev"
+        }
+    },
     "autoload": {
         "psr-4": {
             "Stokehold\\": "src/"

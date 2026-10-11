@@ -58,6 +58,22 @@ final class Worker
     /** The request id reserved for unsolicited frames. */
     public const UNSOLICITED = 0;
 
+    /**
+     * The version of this package, matching the git tag it was released under.
+     *
+     * A constant rather than a read of `Composer\InstalledVersions`, because a
+     * worker started by a bare `php worker.php` may never have been near
+     * Composer — no `vendor/`, no installed metadata — and the version has to
+     * survive at least as long as this file does.
+     *
+     * `composer.json` deliberately carries no `version`: Composer recommends
+     * omitting it for a package published on Packagist, where the tag is
+     * authoritative, and a stale literal there would *override* the tag and be
+     * believed. `WorkerTest.php` fails if this and the tag at HEAD disagree, so
+     * the constant cannot drift from the release.
+     */
+    public const VERSION = '0.1.0';
+
     /** @var resource */
     private $in;
 
@@ -414,8 +430,26 @@ final class Worker
             'php_version' => PHP_VERSION,
             'sapi' => PHP_SAPI,
             'pid' => (int) getmypid(),
-            'runtime' => 'stokehold-worker-php',
+            'runtime' => self::runtime(),
         ]);
+    }
+
+    /**
+     * Identify this worker to the server: the SDK name and its version.
+     *
+     * The `runtime` field says what *implements* the protocol, as distinct from
+     * `php_version` (the runtime the worker is running on) — and a server
+     * talking to several backends has to be able to tell them apart in its logs.
+     *
+     * The version travels here so an operator can discover what is deployed
+     * without shelling into the host: the handshake is the one thing a worker
+     * always sends, so this figure needs no new field, no new message type, and
+     * no protocol change. A server that does not care about it already ignores
+     * it, because `Runtime` is a free-form string.
+     */
+    public static function runtime(): string
+    {
+        return 'stokehold-worker-php/' . self::VERSION;
     }
 
     /**
