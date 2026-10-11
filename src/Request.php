@@ -81,8 +81,29 @@ final class Request
         }
 
         foreach ($this->headers as $name => $value) {
+            // Content-Type and Content-Length are the two headers CGI gives
+            // unprefixed names. This matches the server exactly: it builds the
+            // same array for `php-cgi`, and its own test asserts that
+            // HTTP_CONTENT_TYPE is never sent. Emitting HTTP_CONTENT_TYPE here
+            // instead would leave CONTENT_TYPE absent, and any framework asking
+            // for the content type would see none.
+            if (strcasecmp($name, 'content-length') === 0) {
+                // The framed body length is authoritative, as in the server.
+                continue;
+            }
+            if (strcasecmp($name, 'content-type') === 0) {
+                $server['CONTENT_TYPE'] = $value;
+                continue;
+            }
             $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
             $server[$key] = $value;
+        }
+
+        // A body with no declared type has no CONTENT_TYPE at all, which PHP
+        // treats as form-urlencoded. The server fills this in too, so a worker
+        // sees the same environment a `php-cgi` backend would have seen.
+        if ($this->body !== '' && !isset($server['CONTENT_TYPE'])) {
+            $server['CONTENT_TYPE'] = 'application/x-www-form-urlencoded';
         }
 
         foreach ($this->server as $key => $value) {

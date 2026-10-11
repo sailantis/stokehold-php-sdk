@@ -466,6 +466,29 @@ Assert::same(['x' => '1'], $withBodyPayload['query'], 'the query string is parse
 Assert::same('POST', $withBodyPayload['method'], 'the method is carried through');
 Assert::same('example.test', $withBodyPayload['host'], 'request headers become HTTP_* server variables');
 
+// Content-Type keeps its CGI name rather than becoming HTTP_CONTENT_TYPE, which
+// is what the server sends a php-cgi backend and what the CGI specification
+// says. A framework asking for the content type would otherwise see none.
+$server_vars = (static function (): array {
+    $request = new Request(
+        method: 'POST',
+        uri: '/x?y=1',
+        protocol: 'HTTP/1.1',
+        headers: ['Content-Type' => 'application/json', 'Content-Length' => '7', 'X-Custom' => 'yes'],
+        remoteAddr: '127.0.0.1',
+        scriptFilename: 'index.php',
+        https: false,
+        body: '{"a":1}',
+    );
+
+    return $request->serverVars();
+})();
+Assert::same('application/json', $server_vars['CONTENT_TYPE'] ?? 'missing', 'Content-Type keeps its CGI name');
+Assert::same(null, $server_vars['HTTP_CONTENT_TYPE'] ?? null, 'Content-Type does not become HTTP_CONTENT_TYPE');
+Assert::same('yes', $server_vars['HTTP_X_CUSTOM'] ?? 'missing', 'other headers still become HTTP_*');
+Assert::same('7', $server_vars['CONTENT_LENGTH'] ?? 'missing', 'CONTENT_LENGTH is the framed body length');
+Assert::same(null, $server_vars['HTTP_CONTENT_LENGTH'] ?? null, 'Content-Length does not become HTTP_CONTENT_LENGTH');
+
 // A body that overshoots its declared length is refused: the declared length is
 // authoritative, and exceeding it means the two ends disagree about the framing.
 Assert::throws(

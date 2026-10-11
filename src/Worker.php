@@ -72,7 +72,7 @@ final class Worker
      * believed. `WorkerTest.php` fails if this and the tag at HEAD disagree, so
      * the constant cannot drift from the release.
      */
-    public const VERSION = '0.1.0';
+    public const VERSION = '0.1.1';
 
     /** @var resource */
     private $in;
