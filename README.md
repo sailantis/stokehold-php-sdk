@@ -115,6 +115,7 @@ Worker::create()->run(function (Request $request, Worker $worker): ?Response {
 | `body` | the raw request body |
 | `contentType()` | shorthand for the `Content-Type` header |
 | `query()` | the query string parsed the way PHP populates `$_GET` |
+| `cookies()` | the `Cookie` header parsed the way PHP populates `$_COOKIE` |
 | `serverVars()` | CGI-style variables derived from the request (for legacy code) |
 | `remoteAddr`, `scriptFilename`, `https` | as sent |
 

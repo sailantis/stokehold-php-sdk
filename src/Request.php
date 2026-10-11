@@ -119,8 +119,7 @@ final class Request
      * @return array<string, mixed>
      */
     public function query(): array
-    {
-        $query = parse_url($this->uri, PHP_URL_QUERY);
+    {        $query = parse_url($this->uri, PHP_URL_QUERY);
         if (!is_string($query) || $query === '') {
             return [];
         }
@@ -129,5 +128,40 @@ final class Request
         parse_str($query, $params);
 
         return $params;
+    }
+
+    /**
+     * The cookies parsed the way PHP populates $_COOKIE.
+     *
+     * Nothing else fills $_COOKIE in a worker, so an application that reads it
+     * — or that wants the session id PHP would have found in it — has to be
+     * given the mapping explicitly.
+     *
+     * @return array<string, string>
+     */
+    public function cookies(): array
+    {
+        $header = $this->header('cookie');
+        if ($header === null || $header === '') {
+            return [];
+        }
+
+        $cookies = [];
+        foreach (explode(';', $header) as $pair) {
+            $separator = strpos($pair, '=');
+            if ($separator === false) {
+                continue;
+            }
+
+            $name = urldecode(trim(substr($pair, 0, $separator)));
+            if ($name === '') {
+                continue;
+            }
+
+            // A repeated name: the first wins, as in PHP.
+            $cookies[$name] ??= urldecode(substr($pair, $separator + 1));
+        }
+
+        return $cookies;
     }
 }

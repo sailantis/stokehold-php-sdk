@@ -462,6 +462,38 @@ Assert::same('yes', $server_vars['HTTP_X_CUSTOM'] ?? 'missing', 'other headers s
 Assert::same('7', $server_vars['CONTENT_LENGTH'] ?? 'missing', 'CONTENT_LENGTH is the framed body length');
 Assert::same(null, $server_vars['HTTP_CONTENT_LENGTH'] ?? null, 'Content-Length does not become HTTP_CONTENT_LENGTH');
 
+// $_COOKIE. Nothing fills it in a worker, so the mapping has to exist for an
+// application — or for the session id PHP would have read out of it.
+$cookies = (static function (): array {
+    $request = new Request(
+        method: 'GET',
+        uri: '/',
+        protocol: 'HTTP/1.1',
+        headers: ['Cookie' => '_s=abc%3D123; theme=dark; _s=ignored'],
+        remoteAddr: '127.0.0.1',
+        scriptFilename: 'index.php',
+        https: false,
+        body: '',
+    );
+
+    return $request->cookies();
+})();
+Assert::same(
+    ['_s' => 'abc=123', 'theme' => 'dark'],
+    $cookies,
+    'the Cookie header is parsed the way PHP populates $_COOKIE, first value winning',
+);
+Assert::same(
+    [],
+    (new Request('GET', '/', 'HTTP/1.1', [], '', 'index.php', false, ''))->cookies(),
+    'no Cookie header is no cookies',
+);
+Assert::same(
+    [],
+    (new Request('GET', '/', 'HTTP/1.1', ['Cookie' => '  ; ;=x'], '', 'index.php', false, ''))->cookies(),
+    'malformed cookie pairs are skipped rather than guessed at',
+);
+
 // A body that overshoots its declared length is refused: the declared length is
 // authoritative, and exceeding it means the two ends disagree about the framing.
 Assert::throws(
