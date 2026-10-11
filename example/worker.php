@@ -12,7 +12,8 @@ declare(strict_types=1);
  * It will print a handshake banner to stderr and then wait, doing nothing,
  * because a worker speaks the protocol over stdin/stdout rather than HTTP. To
  * drive it you need the server (`stokehold serve`) or the protocol test in
- * crates/stokehold-worker/tests/php_worker.rs.
+ * `crates/stokehold-worker/tests/php_worker.rs` of the `sailantis/stokehold`
+ * repository.
  *
  * Nothing in here is stokehold-specific except `run()`: this is an ordinary PHP
  * file that happens to stay resident. Note that it `echo`s and returns `null` in

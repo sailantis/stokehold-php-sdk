@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Stokehold;
 
 /**
- * The message type table from docs/worker-protocol.md.
+ * The message type table from the worker protocol specification in the
+ * stokehold server (`sailantis/stokehold`, `docs/worker-protocol.md`).
  *
  * The numbering is the protocol. These constants must match
- * `MessageType` in crates/stokehold-worker/src/header.rs exactly and must never
+ * `MessageType` in `crates/stokehold-worker/src/header.rs` exactly and must never
  * be reordered; a new type is appended, never inserted.
  */
 final class MessageType

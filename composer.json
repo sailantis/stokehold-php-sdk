@@ -9,6 +9,10 @@
         "ext-hash": "*",
         "ext-json": "*"
     },
+    "support": {
+        "issues": "https://github.com/sailantis/stokehold-php-sdk/issues",
+        "source": "https://github.com/sailantis/stokehold-php-sdk"
+    },
     "autoload": {
         "psr-4": {
             "Stokehold\\": "src/"

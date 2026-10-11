@@ -6,7 +6,8 @@ declare(strict_types=1);
  * The PHP side of the protocol freeze.
  *
  * Every golden value here is the *same literal* that
- * crates/stokehold-worker/tests/wire_format.rs asserts. That is the point: if
+ * `crates/stokehold-worker/tests/wire_format.rs` in the `sailantis/stokehold`
+ * repository asserts. That is the point: if
  * either implementation drifts, one of the two tests fails, and neither can
  * quietly become "whatever the code currently does".
  *

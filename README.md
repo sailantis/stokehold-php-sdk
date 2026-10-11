@@ -1,7 +1,16 @@
 # stokehold-worker — the PHP SDK
 
-The PHP end of the [stokehold worker protocol](../../docs/worker-protocol.md): a persistent PHP
-process that boots your application once and serves many requests over stdin/stdout.
+The PHP end of the [stokehold worker
+protocol](https://github.com/sailantis/stokehold/blob/2bc32cd50bdad61dba68b0c526802171a47ec488/docs/worker-protocol.md):
+a persistent PHP process that boots your application once and serves many requests over
+stdin/stdout.
+
+The server itself — the process that spawns and supervises workers — is
+[`sailantis/stokehold`](https://github.com/sailantis/stokehold). This package is only the PHP
+half; it is useful on its own but does nothing without a server to speak to.
+
+The protocol link above is pinned to a commit rather than to a branch: a branch link would
+silently start describing a later protocol than the one this release implements.
 
 It is **stdlib-only**. No extensions, no FFI, no build step, and no Composer requirement just to
 *run* a worker. The whole SDK is four small classes and a codec.
@@ -17,7 +26,7 @@ adapting them to whatever your application already speaks is a few lines.
 
 ```php
 <?php
-require __DIR__ . '/vendor/autoload.php';   // or: require 'path/to/sdk/php/autoload.php';
+require __DIR__ . '/vendor/autoload.php';   // or: require 'path/to/stokehold-worker/autoload.php';
 
 use Stokehold\Request;
 use Stokehold\Response;
@@ -154,7 +163,9 @@ request body back, which is how the pool tests confirm a body arrived as bytes r
 arrived.
 
 To drive it by hand you need something that speaks the protocol; the test below does exactly
-that, over a real pipe:
+that, over a real pipe. It lives in the server repository, because it is the Rust side that
+drives this PHP file — clone
+[`sailantis/stokehold`](https://github.com/sailantis/stokehold) and run it there:
 
 ```bash
 cargo test -p stokehold-worker --test php_worker
@@ -179,8 +190,9 @@ php tests/run.php          # 124 assertions, no PHPUnit needed
 ```
 
 - `tests/WireFormatTest.php` pins the header layout, CRC-32C and the **exact golden bytes** —
-  the same literals that `crates/stokehold-worker/tests/wire_format.rs` asserts, so if either
-  implementation drifts, one of the two suites fails.
+  the same literals that `crates/stokehold-worker/tests/wire_format.rs` in the
+  [`sailantis/stokehold`](https://github.com/sailantis/stokehold) repository asserts, so if
+  either implementation drifts, one of the two suites fails.
 - `tests/WorkerTest.php` drives a `Worker` over in-memory streams: output capture, chunking,
   request bodies, control frames, error recovery, and the framing failures.
 
@@ -208,4 +220,4 @@ not contain one.
 
 ## License
 
-MIT — see [LICENSE](../../LICENSE).
+MIT — see [LICENSE](LICENSE).

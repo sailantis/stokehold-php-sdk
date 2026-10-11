@@ -8,7 +8,8 @@ namespace Stokehold;
  * A decoded frame header: the 16 bytes that precede a payload.
  *
  * This is a direct transliteration of `Header::decode` in
- * crates/stokehold-worker/src/header.rs. The two ends are held together by the
+ * `crates/stokehold-worker/src/header.rs` of the stokehold server
+ * (`sailantis/stokehold`). The two ends are held together by the
  * golden fixtures in tests/WireFormatTest.php, so a change to one that is not
  * mirrored in the other fails there rather than in production.
  *

@@ -7,7 +7,8 @@ namespace Stokehold;
 /**
  * A persistent worker: the loop that serves requests over the protocol.
  *
- * This is the PHP end of docs/worker-protocol.md. The shape an application sees
+ * This is the PHP end of the worker protocol specified in the stokehold server
+ * (`sailantis/stokehold`, `docs/worker-protocol.md`). The shape an application sees
  * is deliberately three lines:
  *
  * ```php
