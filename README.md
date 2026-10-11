@@ -213,24 +213,31 @@ failure: the warning went to stderr instead of into a frame.
 The protocol version is `1`. A worker and a server that disagree are caught at the handshake
 rather than on the first request.
 
-The **package** version is separate from the protocol version and travels in the handshake's
-`runtime` field as `stokehold-worker-php/<version>`, so which build a worker is running is
-visible from the server rather than only from the host. It is deliberately not a protocol change:
-`runtime` is a free-form string, so a server that ignores it behaves exactly as before.
+The **build** is separate from the protocol version and travels in the handshake's `runtime` field as
+`stokehold-worker-php/<build>`, so which build a worker is running is visible from the server rather than
+only from the host. It is deliberately not a protocol change: `runtime` is a free-form string, so a server
+that ignores it behaves exactly as before.
 
-`Worker::VERSION` is the package version, and it is a constant rather than a read of
-`Composer\InstalledVersions` — a worker started by a bare `php worker.php` may never have been
-near Composer, with no `vendor/` and no installed metadata, so the version has to survive at least
-as long as the file does. Two things keep the literal honest:
+`Worker::build()` asks Composer about this package **by name** — the three cases that produces:
 
-- `composer.json` carries **no** `version`. Composer recommends omitting it for a package published
-  on Packagist, and with good reason: a literal there overrides the tag and is believed, so a stale
-  one would be read as the truth.
-- The suite fails if `Worker::VERSION` and the **git tag at HEAD** disagree. It skips that check
-  outside a git checkout, so the tarball Packagist serves still runs the suite.
+| Situation | `build()` | Why |
+| --- | --- | --- |
+| Installed as a release | `0.1.1+7c6945f` | The version names it, the commit pins it exactly |
+| A `dev-main` requirement | `7c6945f` | No meaningful version, so the commit *is* the build |
+| No Composer at all | `unknown` | A bare `php worker.php` never went through Composer |
 
-The two versions move independently: a bug fix that changes no wire behaviour is a patch release,
-while a wire change is a protocol version *and* a major release.
+It is asked by name rather than through `getRootPackage()`, which returns the **consuming application** —
+that would report the host's build under the worker's own name, which is a plausible-looking answer and the
+wrong one. The last row is not a failure: a worker that cannot name its build can still serve requests, and
+should not refuse to start over a diagnostic.
+
+There is deliberately no `Worker::VERSION` constant, and no tag-based check in the suite. While the API is
+settling, `main` is the artifact, and a version literal would be one more thing to keep true by hand on
+every change. The commit identifies the build, and it is the same reference a consuming application's
+`composer.lock` pins — so what a worker reports is what the application can be reproduced from.
+
+The protocol version and the build move independently: a fix that changes no wire behaviour is a new commit,
+while a wire change is a protocol version *and* a release.
 
 The SDK relies on `stream_get_contents($stream, $n)` for exact reads, which blocks until it has
 `$n` bytes or reaches EOF and handles partial reads internally. That is deliberate: hand-rolling

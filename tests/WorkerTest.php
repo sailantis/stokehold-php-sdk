@@ -173,26 +173,6 @@ function a_get(string $uri = '/', int $id = 1): array
 
 // ---------------------------------------------------------------- handshake
 
-/**
- * The tag pointing at HEAD, or null when there is none.
- *
- * Only meaningful in a git checkout, so an exported tarball — the form Packagist
- * serves — simply skips the tag assertion rather than failing on a missing git.
- */
-function head_tag(): ?string
-{
-    $repository = __DIR__ . '/..';
-    if (!is_dir($repository . '/.git')) {
-        return null;
-    }
-
-    $output = [];
-    $status = 0;
-    exec('git -C ' . escapeshellarg($repository) . ' describe --tags --exact-match HEAD 2>&1', $output, $status);
-
-    return $status === 0 && $output !== [] ? trim($output[0]) : null;
-}
-
 $handshake = run_worker([A_HELLO], static fn () => Response::text('unused'));
 $acks = json_of($handshake['frames'], MessageType::HELLO_ACK);
 Assert::same(1, count($acks), 'the worker answers a HELLO with exactly one HELLO_ACK');
@@ -201,28 +181,21 @@ Assert::same(PHP_VERSION, $acks[0]['php_version'], 'the HELLO_ACK reports PHP_VE
 Assert::same(PHP_SAPI, $acks[0]['sapi'], 'the HELLO_ACK reports PHP_SAPI');
 Assert::true($acks[0]['pid'] > 0, 'the HELLO_ACK reports a real pid');
 Assert::same(
-    'stokehold-worker-php/' . Worker::VERSION,
+    'stokehold-worker-php/' . Worker::build(),
     $acks[0]['runtime'],
-    'the HELLO_ACK identifies the SDK and its version',
+    'the HELLO_ACK identifies the SDK and the build it is running',
 );
 Assert::same(0, $handshake['frames'][0]['header']->requestId, 'the HELLO_ACK is unsolicited (request id 0)');
 
-// The version is a literal because a worker run by a bare `php worker.php` has no
-// Composer metadata to read. composer.json carries no `version` either, on
-// Composer's own recommendation: a literal there would override the Packagist tag
-// and be believed. So the tag is the authority, and the two must agree.
+// The build is asked of the install rather than written down, so the only
+// invariant is that the answer is never empty: a worker must always be able to
+// say *something*, and `unknown` is the honest something when Composer is not
+// there to ask.
+Assert::true(Worker::build() !== '', 'the build is never empty');
 Assert::true(
-    preg_match('/^\d+\.\d+\.\d+$/', Worker::VERSION) === 1,
-    'Worker::VERSION is a semantic version',
+    preg_match('/^[A-Za-z0-9._+-]+$/', Worker::build()) === 1,
+    'the build is a single safe token, suitable for a log line',
 );
-$tag = head_tag();
-if ($tag !== null) {
-    Assert::same(
-        'v' . Worker::VERSION,
-        $tag,
-        'Worker::VERSION matches the git tag at HEAD',
-    );
-}
 
 // A mismatched server version is refused at boot, not on the first request.
 Assert::throws(

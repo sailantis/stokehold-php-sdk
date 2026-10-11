@@ -59,20 +59,110 @@ final class Worker
     public const UNSOLICITED = 0;
 
     /**
-     * The version of this package, matching the git tag it was released under.
+     * The package this SDK is, as Composer knows it.
      *
-     * A constant rather than a read of `Composer\InstalledVersions`, because a
-     * worker started by a bare `php worker.php` may never have been near
-     * Composer — no `vendor/`, no installed metadata — and the version has to
-     * survive at least as long as this file does.
-     *
-     * `composer.json` deliberately carries no `version`: Composer recommends
-     * omitting it for a package published on Packagist, where the tag is
-     * authoritative, and a stale literal there would *override* the tag and be
-     * believed. `WorkerTest.php` fails if this and the tag at HEAD disagree, so
-     * the constant cannot drift from the release.
+     * Used to look the build up by name: asking Composer about the *root* package
+     * would return the consuming application instead, and reporting the host's
+     * build under the worker's own name is worse than reporting nothing.
      */
-    public const VERSION = '0.1.1';
+    public const PACKAGE = 'sailantis/stokehold-worker';
+
+    /**
+     * The build of this SDK: the version its checkout is at, the commit it is
+     * on, or both — whatever the surrounding install advertises.
+     *
+     * Deliberately *not* a version constant. During development there is no
+     * release to name — `main` is the artifact — and a literal would be one more
+     * thing to keep true by hand each time anything changed. Asking the install
+     * answers the question that actually matters ("which exact build is this
+     * worker running?") and cannot go stale, because nothing is written down to
+     * go stale.
+     *
+     * `Composer\InstalledVersions` is an optional dependency and a static array
+     * lookup, not a subprocess: null for a worker started by a bare
+     * `php worker.php`, which never went through Composer. It is also null for a
+     * path repository, which carries no version of its own — so the commit
+     * reference is the part that survives in a development checkout, and is the
+     * part that identifies the build.
+     *
+     * `'unknown'` is the honest answer when neither is available. It is not a
+     * failure: a worker that cannot say which build it is can still serve
+     * requests, and it should not refuse to start over a diagnostic.
+     */
+    public static function build(): string
+    {
+        [$version, $reference] = self::installed();
+
+        if ($version === null && $reference === null) {
+            return 'unknown';
+        }
+
+        // A published release: the version is the build, and the commit pins it.
+        if ($version !== null && !str_starts_with($version, 'dev-')) {
+            return $reference === null ? $version : $version . '+' . self::short($reference);
+        }
+
+        // A development checkout: there is no meaningful version, so the commit
+        // *is* the build. It is also the reference a consuming application's
+        // composer.lock pins, which is what makes it the answer worth printing.
+        return $reference === null ? 'unknown' : self::short($reference);
+    }
+
+    /** The seven characters that identify a build in a log line. */
+    private static function short(string $reference): string
+    {
+        return substr($reference, 0, 7);
+    }
+
+    /**
+     * What Composer knows about *this* package, or nulls when it is not installed.
+     *
+     * Asked by name rather than through `getRootPackage()`, because the root
+     * package is the **consuming application**: using it would make the SDK
+     * report its host's build under the worker's own name, which is a plausible
+     * looking answer and the wrong one.
+     *
+     * Everything is guarded because this must never throw. A worker started by a
+     * bare `php worker.php` has no Composer at all, and a diagnostic is not worth
+     * a failed handshake.
+     *
+     * @return array{0: ?string, 1: ?string} version, then commit reference
+     */
+    private static function installed(): array
+    {
+        $class = 'Composer\\InstalledVersions';
+        if (!class_exists($class)) {
+            return [null, null];
+        }
+
+        try {
+            if ($class::isInstalled(self::PACKAGE)) {
+                return [
+                    self::text($class::getVersion(self::PACKAGE)),
+                    self::text($class::getReference(self::PACKAGE)),
+                ];
+            }
+
+            // The package's own checkout: it is installed, but as the root.
+            $root = $class::getRootPackage();
+        } catch (\Throwable) {
+            return [null, null];
+        }
+
+        if (!is_array($root) || ($root['name'] ?? null) !== self::PACKAGE) {
+            return [null, null];
+        }
+
+        return [
+            self::text($root['pretty_version'] ?? $root['version'] ?? null),
+            self::text($root['reference'] ?? null),
+        ];
+    }
+
+    private static function text(mixed $value): ?string
+    {
+        return is_string($value) && $value !== '' ? $value : null;
+    }
 
     /** @var resource */
     private $in;
@@ -435,21 +525,21 @@ final class Worker
     }
 
     /**
-     * Identify this worker to the server: the SDK name and its version.
+     * Identify this worker to the server: the SDK and the build it is running.
      *
      * The `runtime` field says what *implements* the protocol, as distinct from
      * `php_version` (the runtime the worker is running on) — and a server
      * talking to several backends has to be able to tell them apart in its logs.
      *
-     * The version travels here so an operator can discover what is deployed
+     * The build travels here so an operator can discover what is deployed
      * without shelling into the host: the handshake is the one thing a worker
      * always sends, so this figure needs no new field, no new message type, and
      * no protocol change. A server that does not care about it already ignores
-     * it, because `Runtime` is a free-form string.
+     * it, because `runtime` is a free-form string.
      */
     public static function runtime(): string
     {
-        return 'stokehold-worker-php/' . self::VERSION;
+        return 'stokehold-worker-php/' . self::build();
     }
 
     /**

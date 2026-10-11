@@ -95,7 +95,7 @@ final class Request
                 $server['CONTENT_TYPE'] = $value;
                 continue;
             }
-            $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
+            $key = 'HTTP_' . strtoupper(strtr($name, '-', '_'));
             $server[$key] = $value;
         }
 
