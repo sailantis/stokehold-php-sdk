@@ -27,7 +27,12 @@ use Stokehold\Request;
 use Stokehold\Response;
 use Stokehold\Worker;
 
-$worker = Worker::create();
+// `connect()` is `create()` plus one decision: when the server has asked for the socket
+// transport (`transport = "socket"`, or `STOKEHOLD_WORKER_SOCKET` set directly) the
+// protocol runs over that loopback socket; otherwise over stdin/stdout as before. Writing
+// `Worker::create()` here would still work on a pipe, but would ignore the transport the
+// server chose and hang waiting for input that is now arriving on a socket.
+$worker = Worker::connect();
 
 $worker->run(static function (Request $request, Worker $worker): Response|null {
     $path = (string) parse_url($request->uri, PHP_URL_PATH);

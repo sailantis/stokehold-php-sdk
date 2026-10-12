@@ -32,7 +32,7 @@ use Stokehold\Request;
 use Stokehold\Response;
 use Stokehold\Worker;
 
-Worker::create()->run(function (Request $request): Response {
+Worker::connect()->run(function (Request $request): Response {
     return Response::text('hello ' . $request->uri);
 });
 ```
@@ -40,6 +40,11 @@ Worker::create()->run(function (Request $request): Response {
 Start it with `php worker.php`. It will sit waiting, because a worker speaks the protocol over
 stdin/stdout rather than HTTP — point stokehold at it, or see
 [Example](#example) for how to poke it by hand.
+
+`Worker::connect()` is `Worker::create()` with one extra step: when the server has set
+`STOKEHOLD_WORKER_SOCKET` — which it does when the backend's `transport = "socket"` — the
+protocol runs over that loopback socket instead of stdio. Use `connect()` in a worker that a
+`stokehold` backend starts, and `create()` when you are binding streams yourself.
 
 ## The two rules
 
@@ -136,7 +141,8 @@ $response->withStatus(201)->withHeader('X-Trace', 'abc')->withBody('…');
 
 | Method | Purpose |
 | --- | --- |
-| `Worker::create()` | bind to stdio, force `display_errors=stderr` |
+| `Worker::create($in?, $out?)` | bind explicit streams (default: stdio), force `display_errors=stderr` |
+| `Worker::connect()` | `create()`, but honour `STOKEHOLD_WORKER_SOCKET` when the server sets it |
 | `run($handler)` | handshake, then serve until EOF |
 | `emitLog($message, $level)` | one log record, unsolicited |
 | `emitMetric($name, $value, $unit)` | one metric sample, unsolicited |

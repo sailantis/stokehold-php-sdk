@@ -800,4 +800,43 @@ if (\function_exists('memory_reset_peak_usage')) {
     Assert::same((float) $spikeEnd, $reported[0]['value'], 'without a reset the report repeats the peak');
 }
 
+// `Worker::connect()` is `create()` plus one decision, and the decision is worth
+// testing without a socket: every interesting case is *absence*, and every one of
+// them has to mean stdio rather than "connect to nowhere". A worker that dialled
+// `tcp:// ` would fail at startup on a host where stdio was perfectly fine.
+$addressCases = [
+    'unset' => null,
+    'empty' => '',
+    'only whitespace' => '   ',
+    'set' => '127.0.0.1:18400',
+];
+foreach ($addressCases as $case => $value) {
+    if ($value === null) {
+        putenv(Worker::SOCKET_ENV);
+    } else {
+        putenv(Worker::SOCKET_ENV . '=' . $value);
+    }
+
+    $expected = $value === null ? null : trim($value);
+    $found = Worker::socketAddress();
+    Assert::same(
+        $expected === '' ? null : $expected,
+        $found,
+        "the socket address is read from the environment ($case)",
+    );
+}
+// Leave the environment as the surrounding tests found it: a stray value here would
+// make a later `connect()` dial an address nobody is listening on.
+putenv(Worker::SOCKET_ENV);
+
+// And the fallback itself: with nothing set, `connect()` must produce a worker bound
+// to stdio rather than throwing or dialling. It is not driven with a handshake here
+// because a real process-level check exists in the Rust integration test; what this
+// pins is the branch, which is the part that a missing `connect()` would break.
+Assert::same(
+    null,
+    Worker::socketAddress(),
+    'with the variable cleared, the transport is stdio',
+);
+
 exit(Assert::report('worker behaviour'));

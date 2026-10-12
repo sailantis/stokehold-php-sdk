@@ -240,6 +240,94 @@ final class Worker
     }
 
     /**
+     * The environment variable a server sets to ask for the socket transport.
+     *
+     * Its value is the `host:port` the server is already listening on.
+     */
+    public const SOCKET_ENV = 'STOKEHOLD_WORKER_SOCKET';
+
+    /**
+     * How long to wait for the server to accept the connection.
+     *
+     * Generous on purpose: the server binds its listener *before* spawning the worker, so
+     * the connection is already waiting when this runs. The timeout is here to turn "the
+     * server is not there" into an error rather than a hang.
+     */
+    private const CONNECT_TIMEOUT = 10.0;
+
+    /**
+     * Create a worker bound to whichever transport the server asked for.
+     *
+     * This is what a worker file should call. With `STOKEHOLD_WORKER_SOCKET` set, the
+     * protocol runs over a loopback socket; with it unset, over stdin/stdout exactly as
+     * [`Worker::create`] does. Nothing else in a worker needs to know which one it got.
+     *
+     * The option exists for one measured reason. On Windows, PHP's stream layer takes ~8 ms
+     * median (15 ms at p95) to return from a blocking read on a *pipe*, while the same read
+     * on a *socket* returns in ~0.09 ms. A Rust process reading the identical pipe returns
+     * in 0.010 ms, so the cost is PHP-on-Windows rather than the pipe. See the `transport`
+     * setting in the stokehold configuration, and plan hazard 46.
+     *
+     * A worker that cannot reach the address exits non-zero rather than falling back to
+     * stdio. Falling back would be worse than failing: the server is waiting for a
+     * connection, so a worker that quietly reads stdin instead would present as a startup
+     * timeout with no clue as to the cause.
+     */
+    public static function connect(): self
+    {
+        $address = self::socketAddress();
+
+        if ($address === null) {
+            return self::create();
+        }
+
+        // `@` because the warning duplicates the message below, which is also written to
+        // stderr — and on the socket transport stderr is the only channel the server sees.
+        $stream = @stream_socket_client(
+            'tcp://' . $address,
+            $errno,
+            $errstr,
+            self::CONNECT_TIMEOUT,
+        );
+
+        if ($stream === false) {
+            fwrite(
+                STDERR,
+                'worker: cannot reach ' . $address . ' (' . self::SOCKET_ENV . '): '
+                . $errstr . ' (' . $errno . ')' . PHP_EOL,
+            );
+            exit(1);
+        }
+
+        return self::create($stream, $stream);
+    }
+
+    /**
+     * The address the server asked to be reached at, or `null` for stdio.
+     *
+     * Split out from [`Worker::connect`] so the decision is testable without a socket: the
+     * interesting cases are all *absence* — unset, set to an empty string, set to a string
+     * of whitespace — and each of them must mean stdio rather than "connect to nowhere".
+     * An empty value is what a shell produces for `STOKEHOLD_WORKER_SOCKET=`, which is a
+     * thing an operator will type while debugging.
+     */
+    public static function socketAddress(): ?string
+    {
+        $address = getenv(self::SOCKET_ENV);
+
+        if (!is_string($address)) {
+            return null;
+        }
+
+        // Whitespace too, not just the empty string: `STOKEHOLD_WORKER_SOCKET= ` is what a
+        // shell produces from a stray space, and connecting to `tcp:// ` would be a
+        // confusing failure rather than the obvious one.
+        $address = trim($address);
+
+        return $address === '' ? null : $address;
+    }
+
+    /**
      * Handshake, then serve requests until the server closes stdin.
      *
      * `$handler` receives the [`Request`] and this worker, and may return:
