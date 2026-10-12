@@ -130,6 +130,57 @@ Assert::true($decodedLast->isLast(), 'the LAST flag decodes');
 Assert::same(0, $decodedLast->flags & Header::FLAG_COMPRESSED, 'COMPRESSED is not set');
 Assert::same(0, $decodedLast->flags & Header::FLAG_CHUNKED, 'CHUNKED is not set');
 
+// ------------------------------------------------- the no-checksum frame
+
+// The bit's value is part of the protocol for the same reason the message
+// numbers are: the Rust end tests it.
+Assert::same(0x0010, Header::FLAG_NO_CHECKSUM, 'NO_CHECKSUM is bit four of the flags field');
+Assert::same(
+    0,
+    Header::FLAG_NO_CHECKSUM & (Header::FLAG_COMPRESSED | Header::FLAG_CHUNKED
+        | Header::FLAG_LAST | Header::FLAG_ERROR),
+    'NO_CHECKSUM is disjoint from every other defined bit',
+);
+
+// Computed independently (a throwaway model of the header and the CRC-32C), so
+// this is not merely "whatever the code currently does". The payload is
+// `{"protocol_version":1,"no_checksum":true}`, the same fixture the Rust
+// `a_hello_frame_matches_its_golden_bytes` asserts.
+$unchecked = (new Frame(MessageType::HELLO, 0, json_encode([
+    'protocol_version' => 1,
+    'no_checksum' => true,
+], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)))->encode(false);
+Assert::same(
+    '29000000' . '01' . '01' . '1000' . '00000000' . '00000000'
+        . '7b2270726f746f636f6c5f76657273696f6e223a312c226e6f5f636865636b73756d223a747275657d',
+    $hex($unchecked),
+    'an unchecked frame raises the flag and zeroes the checksum field',
+);
+Assert::same(16 + 41, strlen($unchecked), 'and the header keeps its 16 bytes');
+Assert::true(
+    Header::decode(substr($unchecked, 0, 16))->declaresNoChecksum(),
+    'the flag decodes back',
+);
+
+// This is exactly why the flag exists rather than a zero sentinel: an empty
+// payload's real checksum *is* zero, so a value-based sentinel would be
+// indistinguishable from a correct checksum — and would let corruption of the
+// field itself turn the check off. The flags are what tell them apart.
+$checkedEmpty = (new Frame(MessageType::END, 1))->encode();
+$uncheckedEmpty = (new Frame(MessageType::END, 1))->encode(false);
+Assert::same('010b0000', $hex(substr($checkedEmpty, 4, 4)), 'a checked empty frame: version 1, END, no flags');
+Assert::same('1000', $hex(substr($uncheckedEmpty, 6, 2)), 'the same payload unchecked raises the flag');
+Assert::same(
+    $hex(substr($checkedEmpty, 12, 4)),
+    $hex(substr($uncheckedEmpty, 12, 4)),
+    'and the checksum field is zero in both, which is precisely the ambiguity the flag resolves',
+);
+Assert::same(
+    false,
+    Header::decode(substr($checkedEmpty, 0, 16))->declaresNoChecksum(),
+    'the checked frame does not claim to be unchecked',
+);
+
 // ----------------------------------------------------------------- refusals
 
 Assert::throws(

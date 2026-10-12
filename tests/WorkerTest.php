@@ -70,6 +70,11 @@ function drained($stream): string
 /**
  * Decode every frame in a byte string, verifying each checksum.
  *
+ * A frame that declares `FLAG_NO_CHECKSUM` is accepted with a zero checksum field instead,
+ * which is the one thing the flag is allowed to mean. The *reader* decides, exactly as
+ * `Worker::readPayload` does: this helper mirrors the worker's rule so a test can decode a
+ * stream the worker wrote after agreeing to skip the hash.
+ *
  * @return list<array{header: Header, payload: string}>
  */
 function parse_frames(string $bytes): array
@@ -84,7 +89,11 @@ function parse_frames(string $bytes): array
         $payload = substr($bytes, $offset, $header->payloadLen);
         $offset += $header->payloadLen;
 
-        if (Frame::crc32c($payload) !== $header->checksum) {
+        if ($header->declaresNoChecksum()) {
+            if ($header->checksum !== 0) {
+                throw new RuntimeException('a frame declared no checksum but carried one');
+            }
+        } elseif (Frame::crc32c($payload) !== $header->checksum) {
             throw new RuntimeException('the worker wrote a frame with a bad checksum');
         }
 
@@ -156,6 +165,9 @@ function run_worker(array $frames, callable $handler): array
 /** A HELLO, as the server sends first. */
 const A_HELLO = [MessageType::HELLO, 0];
 
+/** A HELLO that offers the worker the option of omitting the checksum. */
+const A_OFFERED_HELLO = [MessageType::HELLO, 0, ['protocol_version' => 1, 'no_checksum' => true]];
+
 /** A GET request, with no body. */
 function a_get(string $uri = '/', int $id = 1): array
 {
@@ -206,6 +218,86 @@ Assert::throws(
     'a server speaking an unknown protocol version is refused at the handshake',
     'protocol version 9',
 );
+
+// ------------------------------------------------------- the checksum option
+
+// A server that does not mention the field is answered with an explicit `false`,
+// not with silence: the SDK states what it agreed to, so a server can record it.
+$plain = run_worker([A_HELLO], static fn () => Response::text('unused'));
+Assert::same(
+    false,
+    json_of($plain['frames'], MessageType::HELLO_ACK)[0]['no_checksum'],
+    'a HELLO that does not offer the option is answered with no_checksum false',
+);
+
+// The offer accepted: the HELLO_ACK still carries a real checksum, because both
+// ends are verifying at the moment the agreement is exchanged, and every frame
+// *after* it is written with the flag raised and a zero checksum field.
+$offered = run_worker(
+    array_merge([A_OFFERED_HELLO], a_get('/x')),
+    static fn () => Response::text('body'),
+);
+Assert::same(
+    true,
+    json_of($offered['frames'], MessageType::HELLO_ACK)[0]['no_checksum'],
+    'the offer is echoed back in the HELLO_ACK',
+);
+$ack = $offered['frames'][0]['header'];
+Assert::same(0, $ack->flags & Header::FLAG_NO_CHECKSUM, 'the HELLO_ACK itself is still checksummed');
+
+$bodyFrame = null;
+foreach ($offered['frames'] as $frame) {
+    if ($frame['header']->messageType === MessageType::BODY) {
+        $bodyFrame = $frame;
+    }
+}
+Assert::true($bodyFrame !== null, 'the offered worker still answered with a body');
+Assert::same(
+    Header::FLAG_NO_CHECKSUM,
+    $bodyFrame['header']->flags & Header::FLAG_NO_CHECKSUM,
+    'a frame written after the agreement declares that it has no checksum',
+);
+Assert::same(0, $bodyFrame['header']->checksum, 'and the checksum field is zero');
+Assert::same('body', $bodyFrame['payload'], 'the payload itself is untouched');
+
+// A frame that claims no checksum on a worker that never agreed is refused. This
+// is the rule that stops a server from turning the check off unilaterally.
+Assert::throws(
+    static function (): void {
+        $in = server_stream([
+            [MessageType::HELLO, 0, ['protocol_version' => 1, 'no_checksum' => false]],
+            [MessageType::REQUEST, 1, ['method' => 'GET', 'uri' => '/', 'body_len' => 0], Header::FLAG_NO_CHECKSUM],
+        ]);
+        (new Worker($in, sink(), sink()))->run(static fn () => Response::text('x'));
+    },
+    'a frame declaring no checksum is refused when the option was never agreed',
+    'never agreed to',
+);
+
+// And a refused offer is not a crash: the worker keeps verifying and serves.
+$refused = run_worker(
+    array_merge([A_OFFERED_HELLO], a_get('/kept')),
+    static fn (Request $request) => Response::text('kept ' . $request->uri),
+);
+Assert::same(
+    ['kept /kept'],
+    payloads_of($refused['frames'], MessageType::BODY),
+    'a worker that agreed to the option still serves normally',
+);
+
+// The offer is echoed only when it is the JSON literal `true`: a truthy string
+// must not be read as agreement, or a sloppy server could switch the check off.
+foreach ([1, '1', 'yes', 'on', 'true', null] as $notAnOffer) {
+    $in = server_stream([[MessageType::HELLO, 0, ['protocol_version' => 1, 'no_checksum' => $notAnOffer]]]);
+    $out = sink();
+    (new Worker($in, $out, sink()))->run(static fn () => Response::text('unused'));
+    $answer = json_decode(parse_frames(drained($out))[0]['payload'], true, 512, JSON_THROW_ON_ERROR);
+    Assert::same(
+        false,
+        $answer['no_checksum'],
+        'only the JSON literal true counts as consent, not ' . var_export($notAnOffer, true),
+    );
+}
 
 // --------------------------------------------------------- a simple request
 

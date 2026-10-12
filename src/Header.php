@@ -36,6 +36,19 @@ final class Header
     public const FLAG_LAST = 0x0004;
     /** The sender is reporting a failure. */
     public const FLAG_ERROR = 0x0008;
+    /**
+     * The `crc32c` field is not meaningful and must not be verified.
+     *
+     * Both ends must have agreed to this at the handshake; a frame that raises it without
+     * agreement is a protocol violation, which [`Worker`] refuses. The field itself is still
+     * written (as zero) so the header stays 16 bytes.
+     *
+     * A flag rather than a zero checksum, because zero is already a real checksum:
+     * `crc32c('') === 0`, which every empty-payload frame carries. Using zero as the sentinel
+     * would make a correctly-checksummed `HELLO` or `END` indistinguishable from an unchecked
+     * one, and would let corruption of the checksum field itself disable the check.
+     */
+    public const FLAG_NO_CHECKSUM = 0x0010;
 
     public function __construct(
         public readonly int $payloadLen,
@@ -104,6 +117,17 @@ final class Header
     public function isLast(): bool
     {
         return ($this->flags & self::FLAG_LAST) !== 0;
+    }
+
+    /**
+     * Whether this frame declares that its `crc32c` field is not a checksum.
+     *
+     * The writer's *claim*, not a permission: whether it may be believed is the reader's
+     * decision, and [`Worker::readPayload`] refuses one the handshake never agreed to.
+     */
+    public function declaresNoChecksum(): bool
+    {
+        return ($this->flags & self::FLAG_NO_CHECKSUM) !== 0;
     }
 
     /**

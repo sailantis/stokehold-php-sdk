@@ -183,6 +183,16 @@ final class Worker
     private bool $stopping = false;
 
     /**
+     * Whether frames are written with a checksum.
+     *
+     * Set once, by the handshake, from the agreement the server offered in its `HELLO`. Read
+     * on both sides of the codec: [`Worker::send`] writes frames under it, and
+     * [`Worker::readPayload`] uses it to decide whether a frame may declare that it has no
+     * checksum.
+     */
+    private bool $checksum = true;
+
+    /**
      * @param resource $in  the server's end: frames to read
      * @param resource $out stdout: frames to write
      * @param resource $err stderr: diagnostics, never part of the protocol
@@ -489,6 +499,10 @@ final class Worker
             $payload = $this->readPayload($header);
 
             if ($header->messageType === MessageType::HELLO) {
+                // The offer, taken from the HELLO. It is deliberately *not* acted on yet: a
+                // worker that stopped checksumming before its answer had been read and
+                // understood would be trusting a frame it has not yet answered.
+                $offer = false;
                 if ($header->payloadLen > 0) {
                     $hello = $this->decodeJson($payload, 'a HELLO');
                     $version = $this->intField($hello, 'protocol_version', Header::PROTOCOL_VERSION);
@@ -499,6 +513,7 @@ final class Worker
                             Header::PROTOCOL_VERSION,
                         ));
                     }
+                    $offer = $this->boolField($hello, 'no_checksum', false);
                 }
                 break;
             }
@@ -515,13 +530,21 @@ final class Worker
             );
         }
 
+        // The answer is sent *before* the switch, so the `HELLO_ACK` always carries a real
+        // checksum: both ends are still verifying at the moment the agreement is exchanged.
+        // Only then does the worker adopt it, and only if it agreed.
         $this->sendJson(MessageType::HELLO_ACK, self::UNSOLICITED, [
             'protocol_version' => Header::PROTOCOL_VERSION,
             'php_version' => PHP_VERSION,
             'sapi' => PHP_SAPI,
             'pid' => (int) getmypid(),
             'runtime' => self::runtime(),
+            'no_checksum' => $offer,
         ]);
+
+        if ($offer) {
+            $this->checksum = false;
+        }
     }
 
     /**
@@ -786,6 +809,11 @@ final class Worker
      * construction: the exception propagates out of `run()` and the process
      * exits, rather than trying to resynchronise a stream that cannot be
      * resynchronised.
+     *
+     * A frame that declares `FLAG_NO_CHECKSUM` is read without hashing it, but only when this
+     * worker has actually agreed to that; otherwise the claim is a protocol violation, because
+     * accepting it would let the server turn the check off on a worker that never offered to
+     * give it up. The agreement is process-wide and set once, in the handshake.
      */
     private function readPayload(Header $header): string
     {
@@ -803,13 +831,24 @@ final class Worker
             ));
         }
 
-        $computed = Frame::crc32c($payload);
-        if ($computed !== $header->checksum) {
+        if (!$header->declaresNoChecksum()) {
+            $computed = Frame::crc32c($payload);
+            if ($computed !== $header->checksum) {
+                throw new ProtocolException(sprintf(
+                    'payload checksum mismatch on request %d: expected 0x%08x, computed 0x%08x',
+                    $header->requestId,
+                    $header->checksum,
+                    $computed,
+                ));
+            }
+
+            return $payload;
+        }
+
+        if ($this->checksum) {
             throw new ProtocolException(sprintf(
-                'payload checksum mismatch on request %d: expected 0x%08x, computed 0x%08x',
-                $header->requestId,
-                $header->checksum,
-                $computed,
+                'the server sent a %s frame declaring no checksum, which this worker never agreed to',
+                $header->typeName(),
             ));
         }
 
@@ -825,12 +864,12 @@ final class Worker
      */
     private function send(Frame $frame): void
     {
-        $bytes = $frame->encode();
+        $bytes = $frame->encode($this->checksum);
         $length = strlen($bytes);
         $offset = 0;
 
         while ($offset < $length) {
-            $written = fwrite($this->out, substr($bytes, $offset));
+            $written = fwrite($this->out, $offset === 0 ? $bytes : substr($bytes, $offset));
             if ($written === false || $written === 0) {
                 throw new ProtocolException('the server closed its input while a frame was being written');
             }
@@ -896,6 +935,23 @@ final class Worker
         $value = $data[$key] ?? $default;
 
         return is_string($value) ? $value : $default;
+    }
+
+    /**
+     * A field that must be exactly `true`, not merely truthy.
+     *
+     * `filter_var(..., FILTER_VALIDATE_BOOL)` would also accept `1`, `"1"`, `"yes"` and `"on"`,
+     * and that tolerance is the wrong direction for a field that switches off an integrity
+     * check: only the JSON literal `true` — what both ends of this protocol write — should be
+     * enough. A `null`, an integer, a missing key and the string `"false"` all answer `false`.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function boolField(array $data, string $key, bool $default = false): bool
+    {
+        $value = $data[$key] ?? $default;
+
+        return $value === true;
     }
 
     /**

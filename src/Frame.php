@@ -25,17 +25,27 @@ final class Frame
      *
      * `pack('VCCvVV', …)` lays the six fields out little-endian at the right
      * offsets: 4 + 1 + 1 + 2 + 4 + 4 = 16 bytes.
+     *
+     * `$checksum` is passed in rather than remembered here, because the decision belongs to the
+     * [`Worker`] that made the handshake agreement — a `Frame` is built by application-adjacent
+     * code that has no business choosing a policy, and a process-wide switch would be state
+     * that outlives the worker which set it.
+     *
+     * With the checksum off the field is written as zero and `FLAG_NO_CHECKSUM` is raised, which
+     * is what makes the zero mean "not a checksum" rather than "the checksum of an empty
+     * payload" — see [`Header::FLAG_NO_CHECKSUM`]. The saving is the whole point: `crc32c` walks
+     * every payload byte, and a response body is the largest payload the protocol carries.
      */
-    public function encode(): string
+    public function encode(bool $checksum = true): string
     {
         return pack(
             'VCCvVV',
             strlen($this->payload),
             Header::PROTOCOL_VERSION,
             $this->messageType,
-            $this->flags,
+            $checksum ? $this->flags : ($this->flags | Header::FLAG_NO_CHECKSUM),
             $this->requestId,
-            self::crc32c($this->payload),
+            $checksum ? self::crc32c($this->payload) : 0,
         ) . $this->payload;
     }
 

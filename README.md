@@ -208,13 +208,29 @@ failure: the warning went to stderr instead of into a frame.
   **8.2.23, 8.3.31, 8.4.24 and 8.5.9**. PHP 8.0 and 8.1 are below the floor and untested; 8.0
   additionally fails to parse the SDK.
 - `ext-hash` for `hash('crc32c', …)` — that is how the checksum is computed without
-  reimplementing the polynomial, and it matches `crc32c` in Rust exactly.
+  reimplementing the polynomial, and it matches `crc32c` in Rust exactly. With the checksum
+  option below turned on, the frame codec skips the hash entirely; nothing else in the SDK uses
+  `ext-hash`, so a deployment that always turns it off could in principle drop the extension.
 - `ext-json`.
 
 The protocol version is `1`. A worker and a server that disagree are caught at the handshake
 rather than on the first request.
 
-The **build** is separate from the protocol version and travels in the handshake's `runtime` field as
+### Skipping the checksum
+
+A server may offer, in its `HELLO`, to let the worker stop computing the per-frame CRC-32C. The
+SDK accepts only when the field is the JSON literal `true` — a `1`, a `"yes"` or a missing key all
+read as "no", because a field that switches off an integrity check should take exactly one
+spelling — and it echoes the answer in its `HELLO_ACK`. Both ends verify the handshake itself, so
+the exchange that carries the agreement is protected; only the frames after it are unchecked.
+
+Nothing has to be configured here: an older server sends no such field and the worker keeps
+checksumming. And a server that sends an unchecked frame to a worker that never agreed gets a
+protocol error rather than a silent downgrade. See
+[`docs/worker-protocol.md`](https://github.com/sailantis/stokehold/blob/main/docs/worker-protocol.md)
+for the wire details.
+
+The build is separate from the protocol version and travels in the handshake's `runtime` field as
 `stokehold-worker-php/<build>`, so which build a worker is running is visible from the server rather than
 only from the host. It is deliberately not a protocol change: `runtime` is a free-form string, so a server
 that ignores it behaves exactly as before.
