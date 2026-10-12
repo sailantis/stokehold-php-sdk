@@ -42,9 +42,15 @@ stdin/stdout rather than HTTP — point stokehold at it, or see
 [Example](#example) for how to poke it by hand.
 
 `Worker::connect()` is `Worker::create()` with one extra step: when the server has set
-`STOKEHOLD_WORKER_SOCKET` — which it does when the backend's `transport = "socket"` — the
-protocol runs over that loopback socket instead of stdio. Use `connect()` in a worker that a
+`STOKEHOLD_WORKER_SOCKET` — which it does on the `socket` transport, **the default on Windows** —
+the protocol runs over that loopback socket instead of stdio. Use `connect()` in a worker that a
 `stokehold` backend starts, and `create()` when you are binding streams yourself.
+
+This is not cosmetic on Windows. A worker that calls `create()` cannot read a socket, so under
+the default transport it reads `php://stdin` — which the server has set to end-of-file — and exits
+during its handshake. The server reports that at startup, naming `connect()` as the fix, so it
+fails fast and loudly rather than hanging; but `connect()` is the call to use. It is backward
+compatible either way: with no address in the environment it is exactly `create()`.
 
 ## The two rules
 

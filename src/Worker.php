@@ -12,7 +12,7 @@ namespace Stokehold;
  * is deliberately three lines:
  *
  * ```php
- * $worker = Worker::create();
+ * $worker = Worker::connect();
  * $worker->run(function (Request $request, Worker $worker): Response {
  *     return Response::text('hello ' . $request->uri);
  * });
