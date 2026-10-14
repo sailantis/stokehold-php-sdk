@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * A minimal stokehold worker.
+ * A minimal volucer worker.
  *
  * Run it directly — there is nothing to install:
  *
@@ -11,11 +11,11 @@ declare(strict_types=1);
  *
  * It will print a handshake banner to stderr and then wait, doing nothing,
  * because a worker speaks the protocol over stdin/stdout rather than HTTP. To
- * drive it you need the server (`stokehold serve`) or the protocol test in
- * `crates/stokehold-worker/tests/php_worker.rs` of the `sailantis/stokehold`
+ * drive it you need the server (`volucer serve`) or the protocol test in
+ * `crates/volucer-worker/tests/php_worker.rs` of the `sailantis/volucer`
  * repository.
  *
- * Nothing in here is stokehold-specific except `run()`: this is an ordinary PHP
+ * Nothing in here is volucer-specific except `run()`: this is an ordinary PHP
  * file that happens to stay resident. Note that it `echo`s and returns `null` in
  * places, which works because the SDK captures output and uses it as the body —
  * an application does not have to be rewritten to become worker-safe.
@@ -23,12 +23,12 @@ declare(strict_types=1);
 
 require __DIR__ . '/../autoload.php';
 
-use Stokehold\Request;
-use Stokehold\Response;
-use Stokehold\Worker;
+use Volucer\Request;
+use Volucer\Response;
+use Volucer\Worker;
 
 // `connect()` is `create()` plus one decision: when the server has asked for the socket
-// transport (`transport = "socket"`, or `STOKEHOLD_WORKER_SOCKET` set directly) the
+// transport (`transport = "socket"`, or `VOLUCER_WORKER_SOCKET` set directly) the
 // protocol runs over that loopback socket; otherwise over stdin/stdout as before. Writing
 // `Worker::create()` here would still work on a pipe, but would ignore the transport the
 // server chose and hang waiting for input that is now arriving on a socket.
@@ -95,7 +95,7 @@ $worker->run(static function (Request $request, Worker $worker): Response|null {
     }
 
     return Response::html(
-        '<h1>stokehold worker</h1>'
+        '<h1>volucer worker</h1>'
         . '<p>Method ' . htmlspecialchars($request->method, ENT_QUOTES) . '</p>'
         . '<p>URI ' . htmlspecialchars($request->uri, ENT_QUOTES) . '</p>'
         . '<p>PHP ' . PHP_VERSION . ' on ' . PHP_SAPI . '</p>'

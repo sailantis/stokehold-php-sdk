@@ -1,12 +1,12 @@
-# stokehold-worker — the PHP SDK
+# volucer-worker — the PHP SDK
 
-The PHP end of the [stokehold worker
-protocol](https://github.com/sailantis/stokehold/blob/2bc32cd50bdad61dba68b0c526802171a47ec488/docs/worker-protocol.md):
+The PHP end of the [volucer worker
+protocol](https://github.com/sailantis/volucer/blob/2bc32cd50bdad61dba68b0c526802171a47ec488/docs/worker-protocol.md):
 a persistent PHP process that boots your application once and serves many requests over
 stdin/stdout.
 
 The server itself — the process that spawns and supervises workers — is
-[`sailantis/stokehold`](https://github.com/sailantis/stokehold). This package is only the PHP
+[`sailantis/volucer`](https://github.com/sailantis/volucer). This package is only the PHP
 half; it is useful on its own but does nothing without a server to speak to.
 
 The protocol link above is pinned to a commit rather than to a branch: a branch link would
@@ -26,11 +26,11 @@ adapting them to whatever your application already speaks is a few lines.
 
 ```php
 <?php
-require __DIR__ . '/vendor/autoload.php';   // or: require 'path/to/stokehold-worker/autoload.php';
+require __DIR__ . '/vendor/autoload.php';   // or: require 'path/to/volucer-worker/autoload.php';
 
-use Stokehold\Request;
-use Stokehold\Response;
-use Stokehold\Worker;
+use Volucer\Request;
+use Volucer\Response;
+use Volucer\Worker;
 
 Worker::connect()->run(function (Request $request): Response {
     return Response::text('hello ' . $request->uri);
@@ -38,13 +38,13 @@ Worker::connect()->run(function (Request $request): Response {
 ```
 
 Start it with `php worker.php`. It will sit waiting, because a worker speaks the protocol over
-stdin/stdout rather than HTTP — point stokehold at it, or see
+stdin/stdout rather than HTTP — point volucer at it, or see
 [Example](#example) for how to poke it by hand.
 
 `Worker::connect()` is `Worker::create()` with one extra step: when the server has set
-`STOKEHOLD_WORKER_SOCKET` — which it does on the `socket` transport, **the default on Windows** —
+`VOLUCER_WORKER_SOCKET` — which it does on the `socket` transport, **the default on Windows** —
 the protocol runs over that loopback socket instead of stdio. Use `connect()` in a worker that a
-`stokehold` backend starts, and `create()` when you are binding streams yourself.
+`volucer` backend starts, and `create()` when you are binding streams yourself.
 
 This is not cosmetic on Windows. A worker that calls `create()` cannot read a socket, so under
 the default transport it reads `php://stdin` — which the server has set to end-of-file — and exits
@@ -148,7 +148,7 @@ $response->withStatus(201)->withHeader('X-Trace', 'abc')->withBody('…');
 | Method | Purpose |
 | --- | --- |
 | `Worker::create($in?, $out?)` | bind explicit streams (default: stdio), force `display_errors=stderr` |
-| `Worker::connect()` | `create()`, but honour `STOKEHOLD_WORKER_SOCKET` when the server sets it |
+| `Worker::connect()` | `create()`, but honour `VOLUCER_WORKER_SOCKET` when the server sets it |
 | `run($handler)` | handshake, then serve until EOF |
 | `emitLog($message, $level)` | one log record, unsolicited |
 | `emitMetric($name, $value, $unit)` | one metric sample, unsolicited |
@@ -178,17 +178,17 @@ arrived.
 To drive it by hand you need something that speaks the protocol; the test below does exactly
 that, over a real pipe. It lives in the server repository, because it is the Rust side that
 drives this PHP file — clone
-[`sailantis/stokehold`](https://github.com/sailantis/stokehold) and run it there:
+[`sailantis/volucer`](https://github.com/sailantis/volucer) and run it there:
 
 ```bash
-cargo test -p stokehold-worker --test php_worker
+cargo test -p volucer-worker --test php_worker
 ```
 
 And the server side of the contract — spawning, handshaking, recycling, shutdown — is covered
 against real worker processes by:
 
 ```bash
-cargo test -p stokehold-server --test worker_pool
+cargo test -p volucer-server --test worker_pool
 ```
 
 Those tests are also the honest answer to "how do you know it works": a Rust client writes
@@ -203,8 +203,8 @@ php tests/run.php          # 124 assertions, no PHPUnit needed
 ```
 
 - `tests/WireFormatTest.php` pins the header layout, CRC-32C and the **exact golden bytes** —
-  the same literals that `crates/stokehold-worker/tests/wire_format.rs` in the
-  [`sailantis/stokehold`](https://github.com/sailantis/stokehold) repository asserts, so if
+  the same literals that `crates/volucer-worker/tests/wire_format.rs` in the
+  [`sailantis/volucer`](https://github.com/sailantis/volucer) repository asserts, so if
   either implementation drifts, one of the two suites fails.
 - `tests/WorkerTest.php` drives a `Worker` over in-memory streams: output capture, chunking,
   request bodies, control frames, error recovery, and the framing failures.
@@ -239,11 +239,11 @@ the exchange that carries the agreement is protected; only the frames after it a
 Nothing has to be configured here: an older server sends no such field and the worker keeps
 checksumming. And a server that sends an unchecked frame to a worker that never agreed gets a
 protocol error rather than a silent downgrade. See
-[`docs/worker-protocol.md`](https://github.com/sailantis/stokehold/blob/main/docs/worker-protocol.md)
+[`docs/worker-protocol.md`](https://github.com/sailantis/volucer/blob/main/docs/worker-protocol.md)
 for the wire details.
 
 The build is separate from the protocol version and travels in the handshake's `runtime` field as
-`stokehold-worker-php/<build>`, so which build a worker is running is visible from the server rather than
+`volucer-worker-php/<build>`, so which build a worker is running is visible from the server rather than
 only from the host. It is deliberately not a protocol change: `runtime` is a free-form string, so a server
 that ignores it behaves exactly as before.
 

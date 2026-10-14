@@ -6,7 +6,7 @@ declare(strict_types=1);
  * The PHP side of the protocol freeze.
  *
  * Every golden value here is the *same literal* that
- * `crates/stokehold-worker/tests/wire_format.rs` in the `sailantis/stokehold`
+ * `crates/volucer-worker/tests/wire_format.rs` in the `sailantis/volucer`
  * repository asserts. That is the point: if
  * either implementation drifts, one of the two tests fails, and neither can
  * quietly become "whatever the code currently does".
@@ -19,10 +19,10 @@ declare(strict_types=1);
 require __DIR__ . '/../autoload.php';
 require __DIR__ . '/Assert.php';
 
-use Stokehold\Frame;
-use Stokehold\Header;
-use Stokehold\MessageType;
-use Stokehold\ProtocolException;
+use Volucer\Frame;
+use Volucer\Header;
+use Volucer\MessageType;
+use Volucer\ProtocolException;
 
 $hex = static fn (string $bytes): string => bin2hex($bytes);
 

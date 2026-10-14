@@ -1,17 +1,17 @@
 {
-    "name": "sailantis/stokehold-worker",
-    "description": "The PHP worker SDK for stokehold: serves requests over the stokehold worker protocol.",
+    "name": "sailantis/volucer-worker",
+    "description": "The PHP worker SDK for volucer: serves requests over the volucer worker protocol.",
     "type": "library",
     "license": "MIT",
-    "keywords": ["stokehold", "worker", "php-fpm", "application-server", "roadrunner"],
+    "keywords": ["volucer", "worker", "php-fpm", "application-server", "roadrunner"],
     "require": {
         "php": ">=8.2",
         "ext-hash": "*",
         "ext-json": "*"
     },
     "support": {
-        "issues": "https://github.com/sailantis/stokehold-php-sdk/issues",
-        "source": "https://github.com/sailantis/stokehold-php-sdk"
+        "issues": "https://github.com/sailantis/volucer-php-sdk/issues",
+        "source": "https://github.com/sailantis/volucer-php-sdk"
     },
     "extra": {
         "branch-alias": {
@@ -20,12 +20,12 @@
     },
     "autoload": {
         "psr-4": {
-            "Stokehold\\": "src/"
+            "Volucer\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Stokehold\\Tests\\": "tests/"
+            "Volucer\\Tests\\": "tests/"
         }
     },
     "scripts": {

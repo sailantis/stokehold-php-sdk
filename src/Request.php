@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Stokehold;
+namespace Volucer;
 
 /**
  * A request as the server sent it.
@@ -10,7 +10,7 @@ namespace Stokehold;
  * Deliberately a plain value object rather than PSR-7: the SDK is a transport,
  * not a framework, so it must not force a dependency on anyone's interfaces. An
  * application that wants PSR-7 builds one from this in a few lines (see
- * the worker protocol specification in `sailantis/stokehold` and
+ * the worker protocol specification in `sailantis/volucer` and
  * example/worker.php).
  */
 final class Request

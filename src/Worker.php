@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Stokehold;
+namespace Volucer;
 
 /**
  * A persistent worker: the loop that serves requests over the protocol.
  *
- * This is the PHP end of the worker protocol specified in the stokehold server
- * (`sailantis/stokehold`, `docs/worker-protocol.md`). The shape an application sees
+ * This is the PHP end of the worker protocol specified in the volucer server
+ * (`sailantis/volucer`, `docs/worker-protocol.md`). The shape an application sees
  * is deliberately three lines:
  *
  * ```php
@@ -65,7 +65,7 @@ final class Worker
      * would return the consuming application instead, and reporting the host's
      * build under the worker's own name is worse than reporting nothing.
      */
-    public const PACKAGE = 'sailantis/stokehold-worker';
+    public const PACKAGE = 'sailantis/volucer-worker';
 
     /**
      * The build of this SDK: the version its checkout is at, the commit it is
@@ -244,7 +244,7 @@ final class Worker
      *
      * Its value is the `host:port` the server is already listening on.
      */
-    public const SOCKET_ENV = 'STOKEHOLD_WORKER_SOCKET';
+    public const SOCKET_ENV = 'VOLUCER_WORKER_SOCKET';
 
     /**
      * How long to wait for the server to accept the connection.
@@ -258,7 +258,7 @@ final class Worker
     /**
      * Create a worker bound to whichever transport the server asked for.
      *
-     * This is what a worker file should call. With `STOKEHOLD_WORKER_SOCKET` set, the
+     * This is what a worker file should call. With `VOLUCER_WORKER_SOCKET` set, the
      * protocol runs over a loopback socket; with it unset, over stdin/stdout exactly as
      * [`Worker::create`] does. Nothing else in a worker needs to know which one it got.
      *
@@ -266,7 +266,7 @@ final class Worker
      * median (15 ms at p95) to return from a blocking read on a *pipe*, while the same read
      * on a *socket* returns in ~0.09 ms. A Rust process reading the identical pipe returns
      * in 0.010 ms, so the cost is PHP-on-Windows rather than the pipe. See the `transport`
-     * setting in the stokehold configuration, and plan hazard 46.
+     * setting in the volucer configuration, and plan hazard 46.
      *
      * A worker that cannot reach the address exits non-zero rather than falling back to
      * stdio. Falling back would be worse than failing: the server is waiting for a
@@ -308,7 +308,7 @@ final class Worker
      * Split out from [`Worker::connect`] so the decision is testable without a socket: the
      * interesting cases are all *absence* — unset, set to an empty string, set to a string
      * of whitespace — and each of them must mean stdio rather than "connect to nowhere".
-     * An empty value is what a shell produces for `STOKEHOLD_WORKER_SOCKET=`, which is a
+     * An empty value is what a shell produces for `VOLUCER_WORKER_SOCKET=`, which is a
      * thing an operator will type while debugging.
      */
     public static function socketAddress(): ?string
@@ -319,7 +319,7 @@ final class Worker
             return null;
         }
 
-        // Whitespace too, not just the empty string: `STOKEHOLD_WORKER_SOCKET= ` is what a
+        // Whitespace too, not just the empty string: `VOLUCER_WORKER_SOCKET= ` is what a
         // shell produces from a stray space, and connecting to `tcp:// ` would be a
         // confusing failure rather than the obvious one.
         $address = trim($address);
@@ -650,7 +650,7 @@ final class Worker
      */
     public static function runtime(): string
     {
-        return 'stokehold-worker-php/' . self::build();
+        return 'volucer-worker-php/' . self::build();
     }
 
     /**
@@ -1049,7 +1049,7 @@ final class Worker
      */
     private function diagnose(string $message): void
     {
-        fwrite($this->err, '[stokehold] ' . $message . "\n");
+        fwrite($this->err, '[volucer] ' . $message . "\n");
         fflush($this->err);
     }
 }

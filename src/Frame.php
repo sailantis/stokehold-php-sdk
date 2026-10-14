@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Stokehold;
+namespace Volucer;
 
 /**
  * A frame ready to send: a message type, a request id, and a payload.

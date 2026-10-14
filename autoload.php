@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * A dependency-free PSR-4 autoloader for the Stokehold\ namespace.
+ * A dependency-free PSR-4 autoloader for the Volucer\ namespace.
  *
  * The SDK is deliberately stdlib-only: no extensions, no FFI, no build step, and
  * no Composer needed just to *run* a worker. An application that manages its
@@ -16,7 +16,7 @@ declare(strict_types=1);
  */
 
 spl_autoload_register(static function (string $class): void {
-    $prefix = 'Stokehold\\';
+    $prefix = 'Volucer\\';
 
     if (!str_starts_with($class, $prefix)) {
         return;

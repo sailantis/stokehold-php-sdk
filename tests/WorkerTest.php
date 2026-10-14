@@ -20,12 +20,12 @@ declare(strict_types=1);
 require __DIR__ . '/../autoload.php';
 require __DIR__ . '/Assert.php';
 
-use Stokehold\Frame;
-use Stokehold\Header;
-use Stokehold\MessageType;
-use Stokehold\Request;
-use Stokehold\Response;
-use Stokehold\Worker;
+use Volucer\Frame;
+use Volucer\Header;
+use Volucer\MessageType;
+use Volucer\Request;
+use Volucer\Response;
+use Volucer\Worker;
 
 /**
  * Encode a sequence of `[type, request_id, payload_or_array, flags]` frames into
@@ -193,7 +193,7 @@ Assert::same(PHP_VERSION, $acks[0]['php_version'], 'the HELLO_ACK reports PHP_VE
 Assert::same(PHP_SAPI, $acks[0]['sapi'], 'the HELLO_ACK reports PHP_SAPI');
 Assert::true($acks[0]['pid'] > 0, 'the HELLO_ACK reports a real pid');
 Assert::same(
-    'stokehold-worker-php/' . Worker::build(),
+    'volucer-worker-php/' . Worker::build(),
     $acks[0]['runtime'],
     'the HELLO_ACK identifies the SDK and the build it is running',
 );
